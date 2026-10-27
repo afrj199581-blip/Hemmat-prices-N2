@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>دليل أسعار الصيدلية والمستلزمات - مكتب الريان</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        :root {
+            --primary: #0d9488;
+            --primary-dark: #0f766e;
+            --bg: #f1f5f9;
+            --card: #ffffff;
+            --text: #0f172a;
+        }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg); color: var(--text); margin: 0; padding: 16px; display: flex; justify-content: center; min-height: 100vh; }
+        .app-card { width: 100%; max-width: 600px; background: var(--card); padding: 24px 20px; border-radius: 20px; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.07); height: fit-content; margin-top: 10px; }
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h1 { color: var(--primary-dark); margin: 0 0 10px 0; font-size: 1.4rem; }
+        .badge-count { display: inline-block; background: #f0fdfa; color: var(--primary-dark); border: 1px solid #99f6e4; padding: 6px 14px; border-radius: 999px; font-size: 0.85rem; font-weight: 700; }
+        
+        .search-box { position: relative; margin-bottom: 15px; }
+        .search-input { width: 100%; padding: 16px 20px 16px 45px; font-size: 1.05rem; border: 2px solid #cbd5e1; border-radius: 14px; outline: none; background: #f8fafc; font-weight: 500; }
+        .search-input:focus { border-color: var(--primary); background: #ffffff; box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.12); }
+        .clear-btn { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); background: #e2e8f0; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; display: none; font-size: 0.9rem; font-weight: bold; color: #475569; }
+
+        .suggestions { position: absolute; top: calc(100% + 6px); right: 0; left: 0; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 14px; max-height: 320px; overflow-y: auto; z-index: 1000; box-shadow: 0 15px 30px rgba(0, 0, 0, 0.12); display: none; }
+        .suggestion-item { padding: 13px 16px; border-bottom: 1px solid #f1f5f9; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .suggestion-item:hover { background-color: #f0fdfa; }
+        .suggestion-name { font-weight: 600; color: var(--text); font-size: 0.95rem; }
+        .tag-pub { font-size: 0.8rem; background: #ccfbf1; color: #115e59; padding: 4px 8px; border-radius: 6px; font-weight: 700; }
+
+        .result-card { background: linear-gradient(145deg, #0f766e, #0d9488); color: #ffffff; padding: 22px 18px; border-radius: 18px; display: none; margin-top: 20px; box-shadow: 0 10px 25px rgba(13, 148, 136, 0.25); }
+        .item-title { font-size: 1.25rem; font-weight: 800; margin-bottom: 18px; text-align: center; background: rgba(0, 0, 0, 0.15); padding: 12px; border-radius: 12px; }
+        .prices-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-align: center; }
+        .price-box { background: rgba(255, 255, 255, 0.14); padding: 14px 10px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.15); }
+        .price-box.highlight { background: rgba(255, 255, 255, 0.24); border: 1px solid rgba(255, 255, 255, 0.4); }
+        .price-label { font-size: 0.85rem; opacity: 0.92; margin-bottom: 6px; display: block; font-weight: 600; }
+        .price-value { font-size: 1.45rem; font-weight: 800; }
+        .currency { font-size: 0.85rem; opacity: 0.9; margin-right: 2px; }
+
+        .upload-section { margin-top: 25px; padding-top: 20px; border-top: 1px dashed #cbd5e1; text-align: center; }
+        .upload-label { display: block; background: #f0fdfa; border: 2px dashed var(--primary); color: var(--primary-dark); padding: 12px; border-radius: 12px; cursor: pointer; font-weight: 700; transition: 0.2s; }
+        .upload-label:hover { background: #ccfbf1; }
+        #pdfUpload { display: none; }
+        #statusMsg { font-size: 0.85rem; color: var(--primary-dark); margin-top: 10px; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+<div class="app-card">
+    <div class="header">
+        <h1>💊 دليل أسعار الصيدلية والمستلزمات</h1>
+        <span class="badge-count" id="itemCount">جاري التحميل...</span>
+    </div>
+
+    <div class="search-box">
+        <input type="text" id="searchInput" class="search-input" placeholder="اكتب اسم الصنف هنا (مثال: جونسون، ايفا...)" autocomplete="off">
+        <button class="clear-btn" id="clearBtn">✕</button>
+        <div class="suggestions" id="suggestionsBox"></div>
+    </div>
+
+    <div class="result-card" id="resultCard">
+        <div class="item-title" id="resName">اسم الصنف</div>
+        <div class="prices-grid">
+            <div class="price-box">
+                <span class="price-label">💼 سعر الصيدلي</span>
+                <span class="price-value" id="resPharm">0.00</span><span class="currency">ج.م</span>
+            </div>
+            <div class="price-box highlight">
+                <span class="price-label">🛒 سعر الجمهور</span>
+                <span class="price-value" id="resPub">0.00</span><span class="currency">ج.م</span>
+            </div>
+            <div class="price-box">
+                <span class="price-label">💰 صافي المكسب</span>
+                <span class="price-value" id="resProfit">0.00</span><span class="currency">ج.م</span>
+            </div>
+            <div class="price-box">
+                <span class="price-label">📈 نسبة المكسب</span>
+                <span class="price-value" id="resMargin">0%</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="upload-section">
+        <label for="pdfUpload" class="upload-label">📁 اختر ملف الـ PDF لاستخراج الأسعار بدقة</label>
+        <input type="file" id="pdfUpload" accept="application/pdf">
+        <div id="statusMsg"></div>
+    </div>
+</div>
+
+<script>
+let products = JSON.parse(localStorage.getItem('pharmacy_products')) || [];
+const itemCount = document.getElementById('itemCount');
+itemCount.textContent = `الأصناف المسجلة حالياً: ${products.length} صنف`;
+
+function toEnglishDigits(str) {
+    if (!str) return "";
+    const eastern = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+    let res = str.toString();
+    eastern.forEach((d, i) => { res = res.replace(new RegExp(d, 'g'), i); });
+    return res.replace(/٫/g, '.');
+}
+
+function normalizeArabic(text) {
+    return toEnglishDigits(text)
+        .replace(/[أإآ]/g, 'ا')
+        .replace(/ة/g, 'ه')
+        .replace(/[ىئ]/g, 'ي')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+}
+
+const searchInput = document.getElementById('searchInput');
+const suggestionsBox = document.getElementById('suggestionsBox');
+const resultCard = document.getElementById('resultCard');
+const clearBtn = document.getElementById('clearBtn');
+
+searchInput.addEventListener('input', function() {
+    const query = normalizeArabic(this.value);
+    suggestionsBox.innerHTML = '';
+    
+    if (this.value.length > 0) {
+        clearBtn.style.display = 'block';
+    } else {
+        clearBtn.style.display = 'none';
+        suggestionsBox.style.display = 'none';
+        return;
+    }
+
+    const words = query.split(' ').filter(w => w.length > 0);
+    const matches = products.filter(p => {
+        const normName = normalizeArabic(p.name);
+        return words.every(w => normName.includes(w));
+    }).slice(0, 40);
+
+    if (matches.length > 0) {
+        matches.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'suggestion-item';
+            div.innerHTML = `
+                <span class="suggestion-name">${item.name}</span>
+                <span class="tag-pub">جمهور: ${item.pub} ج</span>
+            `;
+            div.addEventListener('click', () => selectProduct(item));
+            suggestionsBox.appendChild(div);
+        });
+        suggestionsBox.style.display = 'block';
+    } else {
+        suggestionsBox.innerHTML = '<div class="suggestion-item" style="justify-content:center; color:#64748b;">لا توجد أصناف مطابقة</div>';
+        suggestionsBox.style.display = 'block';
+    }
+});
+
+function selectProduct(item) {
+    searchInput.value = item.name;
+    suggestionsBox.style.display = 'none';
+    
+    let pharm = Number(item.pharm) || 0;
+    let pub = Number(item.pub) || 0;
+    
+    if (pharm > pub && pub > 0) {
+        let temp = pharm; pharm = pub; pub = temp;
+    }
+
+    const profit = pub - pharm;
+    const marginPercent = pub > 0 ? ((profit / pub) * 100).toFixed(1) : 0;
+
+    document.getElementById('resName').textContent = item.name;
+    document.getElementById('resPharm').textContent = pharm.toFixed(2);
+    document.getElementById('resPub').textContent = pub.toFixed(2);
+    document.getElementById('resProfit').textContent = profit.toFixed(2);
+    document.getElementById('resMargin').textContent = `${marginPercent}%`;
+    
+    resultCard.style.display = 'block';
+}
+
+clearBtn.addEventListener('click', () => {
+    searchInput.value = '';
+    clearBtn.style.display = 'none';
+    suggestionsBox.style.display = 'none';
+    resultCard.style.display = 'none';
+    searchInput.focus();
+});
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.search-box')) suggestionsBox.style.display = 'none';
+});
+
+// محرك استخراج الـ PDF الذكي (يتجاهل أرقام الحجوم مثل 500 مل ويأخذ الأسعار الحقيقية فقط)
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+document.getElementById('pdfUpload').addEventListener('change', async function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const statusMsg = document.getElementById('statusMsg');
+    statusMsg.textContent = '⏳ جاري استخراج الأسعار بدقة وتصفية الحجوم...';
+
+    try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let extracted = [];
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum);
+            const textContent = await page.getTextContent();
+            
+            const midX = page.view[2] / 2;
+            let rightCol = {}, leftCol = {};
+
+            textContent.items.forEach(item => {
+                const str = item.str.trim();
+                if (!str) return;
+                const x = item.transform[4];
+                const y = Math.round(item.transform[5] / 5) * 5;
+                const targetCol = x >= midX ? rightCol : leftCol;
+                if (!targetCol[y]) targetCol[y] = [];
+                targetCol[y].push({ x, text: str });
+            });
+
+            [rightCol, leftCol].forEach(col => {
+                Object.values(col).forEach(row => {
+                    const line = toEnglishDigits(row.map(r => r.text).join(' ')).replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
+                    
+                    // استخراج الأعداد العشرية التي تمثل الأسعار (مثل 120.00 أو 106.00)
+                    const priceMatches = line.match(/\b\d+\.\d{2}\b/g);
+
+                    if (priceMatches && priceMatches.length >= 2) {
+                        let p1 = parseFloat(priceMatches[0]);
+                        let p2 = parseFloat(priceMatches[1]);
+                        
+                        // اسم الصنف هو ما تبقى بعد حذف الأسعار وأرقام الأعمدة الجانبية
+                        let cleanName = line.replace(/\b\d+\.\d{2}\b/g, '').replace(/^\d+\s*/, '').trim();
+
+                        if (cleanName.length > 2 && !cleanName.includes('المستهلك') && !cleanName.includes('اورجا سوفت') && !cleanName.includes('مكتب الريان')) {
+                            let pharm = Math.min(p1, p2);
+                            let pub = Math.max(p1, p2);
+                            extracted.push({ name: cleanName, pharm: pharm, pub: pub });
+                        }
+                    }
+                });
+            });
+        }
+
+        if (extracted.length > 0) {
+            const map = new Map();
+            extracted.forEach(item => map.set(item.name, item));
+            products = Array.from(map.values());
+            localStorage.setItem('pharmacy_products', JSON.stringify(products));
+            itemCount.textContent = `الأصناف المسجلة حالياً: ${products.length} صنف`;
+            statusMsg.textContent = `✅ تمت عملية الاستخراج بدقة وتصحيح ${products.length} صنف بنجاح!`;
+        } else {
+            statusMsg.textContent = '⚠️ لم يتم العثور على أصناف، تأكد من ملف الـ PDF.';
+        }
+    } catch (err) {
+        statusMsg.textContent = '❌ حدث خطأ أثناء القراءة.';
+        console.error(err);
+    }
+});
+</script>
+
+</body>
+</html>
