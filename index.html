@@ -84,7 +84,7 @@
     </div>
 
     <div class="upload-section">
-        <label for="pdfUpload" class="upload-label">📁 اختر ملف الـ PDF لاستخراج الأسعار بدقة</label>
+        <label for="pdfUpload" class="upload-label">📁 اختر ملف الـ PDF لاستخراج كل الأصناف</label>
         <input type="file" id="pdfUpload" accept="application/pdf">
         <div id="statusMsg"></div>
     </div>
@@ -189,7 +189,7 @@ document.addEventListener('click', (e) => {
     if (!e.target.closest('.search-box')) suggestionsBox.style.display = 'none';
 });
 
-// محرك استخراج الـ PDF الذكي (يتجاهل أرقام الحجوم مثل 500 مل ويأخذ الأسعار الحقيقية فقط)
+// محرك استخراج شامل ودقيق لجميع الأصناف من الـ PDF
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 document.getElementById('pdfUpload').addEventListener('change', async function(e) {
@@ -197,7 +197,7 @@ document.getElementById('pdfUpload').addEventListener('change', async function(e
     if (!file) return;
 
     const statusMsg = document.getElementById('statusMsg');
-    statusMsg.textContent = '⏳ جاري استخراج الأسعار بدقة وتصفية الحجوم...';
+    statusMsg.textContent = '⏳ جاري قراءة كل صفحات الملف واستخراج جميع الأصناف...';
 
     try {
         const arrayBuffer = await file.arrayBuffer();
@@ -225,20 +225,26 @@ document.getElementById('pdfUpload').addEventListener('change', async function(e
                 Object.values(col).forEach(row => {
                     const line = toEnglishDigits(row.map(r => r.text).join(' ')).replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
                     
-                    // استخراج الأعداد العشرية التي تمثل الأسعار (مثل 120.00 أو 106.00)
-                    const priceMatches = line.match(/\b\d+\.\d{2}\b/g);
+                    // استخراج جميع الأرقام في السطر (سواء عشرية أو صحيحة)
+                    const nums = line.match(/\b\d+(?:\.\d+)?\b/g);
 
-                    if (priceMatches && priceMatches.length >= 2) {
-                        let p1 = parseFloat(priceMatches[0]);
-                        let p2 = parseFloat(priceMatches[1]);
+                    if (nums && nums.length >= 2) {
+                        // عادة أول رقمين بعد اسم الصنف هما سعر الجمهور وسعر الصيدلي
+                        let p1 = parseFloat(nums[0]);
+                        let p2 = parseFloat(nums[1]);
                         
-                        // اسم الصنف هو ما تبقى بعد حذف الأسعار وأرقام الأعمدة الجانبية
-                        let cleanName = line.replace(/\b\d+\.\d{2}\b/g, '').replace(/^\d+\s*/, '').trim();
+                        // تنظيف اسم الصنف بإزالة الأرقام والرموز الجانبية
+                        let cleanName = line.replace(/\b\d+(?:\.\d+)?\b/g, '').trim();
+                        // إزالة أي أرقام متبقية في البداية أو النهاية
+                        cleanName = cleanName.replace(/^\d+|\d+$/g, '').trim();
 
-                        if (cleanName.length > 2 && !cleanName.includes('المستهلك') && !cleanName.includes('اورجا سوفت') && !cleanName.includes('مكتب الريان')) {
+                        if (cleanName.length > 2 && !cleanName.includes('المستهلك') && !cleanName.includes('اورجا سوفت') && !cleanName.includes('مكتب الريان') && !cleanName.includes('الإثنين')) {
                             let pharm = Math.min(p1, p2);
                             let pub = Math.max(p1, p2);
-                            extracted.push({ name: cleanName, pharm: pharm, pub: pub });
+                            // استبعاد القيم الغير منطقية
+                            if (pub > 0 && pub < 50000) {
+                                extracted.push({ name: cleanName, pharm: pharm, pub: pub });
+                            }
                         }
                     }
                 });
@@ -251,9 +257,9 @@ document.getElementById('pdfUpload').addEventListener('change', async function(e
             products = Array.from(map.values());
             localStorage.setItem('pharmacy_products', JSON.stringify(products));
             itemCount.textContent = `الأصناف المسجلة حالياً: ${products.length} صنف`;
-            statusMsg.textContent = `✅ تمت عملية الاستخراج بدقة وتصحيح ${products.length} صنف بنجاح!`;
+            statusMsg.textContent = `✅ تم استخراج وحفظ ${products.length} صنف بنجاح تام!`;
         } else {
-            statusMsg.textContent = '⚠️ لم يتم العثور على أصناف، تأكد من ملف الـ PDF.';
+            statusMsg.textContent = '⚠️ لم يتم استخراج أصناف، تأكد من ملف الـ PDF.';
         }
     } catch (err) {
         statusMsg.textContent = '❌ حدث خطأ أثناء القراءة.';
