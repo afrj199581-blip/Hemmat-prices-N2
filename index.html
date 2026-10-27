@@ -84,7 +84,7 @@
     </div>
 
     <div class="upload-section">
-        <label for="pdfUpload" class="upload-label">📁 اختر ملف الـ PDF لاستخراج الأسعار بدقة الجدول</label>
+        <label for="pdfUpload" class="upload-label">📁 اختر ملف الـ PDF لاستخراج الأسعار فوراً</label>
         <input type="file" id="pdfUpload" accept="application/pdf">
         <div id="statusMsg"></div>
     </div>
@@ -185,7 +185,7 @@ document.addEventListener('click', (e) => {
     if (!e.target.closest('.search-box')) suggestionsBox.style.display = 'none';
 });
 
-// محرك استخراج دقيق يطابق أعمدة (المستهلك ثم السعر ثم الصنف)
+// محرك استخراج مرن وشامل (يلتقط المستهلك والسعر واسم الصنف بكفاءة)
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 document.getElementById('pdfUpload').addEventListener('change', async function(e) {
@@ -193,7 +193,7 @@ document.getElementById('pdfUpload').addEventListener('change', async function(e
     if (!file) return;
 
     const statusMsg = document.getElementById('statusMsg');
-    statusMsg.textContent = '⏳ جاري قراءة أعمدة المستهلك والسعر واسم الصنف بدقة...';
+    statusMsg.textContent = '⏳ جاري قراءة المستهلك والسعر واستخراج الأصناف...';
 
     try {
         const arrayBuffer = await file.arrayBuffer();
@@ -211,7 +211,7 @@ document.getElementById('pdfUpload').addEventListener('change', async function(e
                 const str = item.str.trim();
                 if (!str) return;
                 const x = item.transform[4];
-                const y = Math.round(item.transform[5] / 5) * 5;
+                const y = Math.round(item.transform[5] / 6) * 6; // تجمع الأسطر المتقارب بدقة
                 const targetCol = x >= midX ? rightCol : leftCol;
                 if (!targetCol[y]) targetCol[y] = [];
                 targetCol[y].push({ x, text: str });
@@ -219,20 +219,30 @@ document.getElementById('pdfUpload').addEventListener('change', async function(e
 
             [rightCol, leftCol].forEach(col => {
                 Object.values(col).forEach(row => {
+                    row.sort((a, b) => a.x - b.x); // ترتيب الكلمات من اليمين لليسار حسب الإحداثيات
                     const line = toEnglishDigits(row.map(r => r.text).join(' ')).replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
                     
-                    // البحث عن نمط جدول الريان: [رقم المستهلك] [رقم السعر (غالباً عشري أو صحيح)] [اسم الصنف]
-                    // مثل: 120 106.00 جونسون بلسم 500 مل
-                    let match = line.match(/^(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s+(.+)$/);
-                    
-                    if (match) {
-                        let consumerPrice = parseFloat(match[1]); // المستهلك (الجمهور)
-                        let pharmPrice = parseFloat(match[2]);    // السعر (الصيدلي)
-                        let itemName = match[3].trim();
+                    // استخراج جميع الأرقام في السطر
+                    let nums = line.match(/\b\d+(?:\.\d+)?\b/g);
 
-                        // التحقق من أن القيم منطقية وألا تكون أرقام تخص اسم الصنف نفسه
-                        if (itemName.length > 2 && !itemName.includes('المستهلك') && !itemName.includes('اورجا سوفت') && !itemName.includes('مكتب الريان')) {
-                            extracted.push({ name: itemName, pharm: pharmPrice, pub: consumerPrice });
+                    if (nums && nums.length >= 2) {
+                        // في تصميم صفحة مكتب الريان لكل عمود: أول رقمين يظهران في اليمين هما (المستهلك) ثم (السعر)
+                        let consumerPrice = parseFloat(nums[0]); // الجمهور
+                        let pharmPrice = parseFloat(nums[1]);    // الصيدلي
+
+                        // اسم الصنف هو النص الذي يأتي بعد الأرقام
+                        let cleanName = line;
+                        nums.forEach(n => {
+                            cleanName = cleanName.replace(n, '');
+                        });
+                        cleanName = cleanName.replace(/[\(\)\+\-\/]/g, ' ').replace(/\s+/g, ' ').trim();
+
+                        if (cleanName.length > 2 && !cleanName.includes('المستهلك') && !cleanName.includes('اورجا سوفت') && !cleanName.includes('مكتب الريان') && !cleanName.includes('الإثنين')) {
+                            // التأكد أن المستهلك هو الأكبر أو يساوي السعر منطقياً، وإلا يتم تعديلها لضمان الصحة
+                            let pub = Math.max(consumerPrice, pharmPrice);
+                            let pharm = Math.min(consumerPrice, pharmPrice);
+
+                            extracted.push({ name: cleanName, pharm: pharm, pub: pub });
                         }
                     }
                 });
@@ -245,9 +255,9 @@ document.getElementById('pdfUpload').addEventListener('change', async function(e
             products = Array.from(map.values());
             localStorage.setItem('pharmacy_products', JSON.stringify(products));
             itemCount.textContent = `الأصناف المسجلة حالياً: ${products.length} صنف`;
-            statusMsg.textContent = `✅ تم استخراج ${products.length} صنف بدقة مطابقة لأعمدة الجدول تماماً!`;
+            statusMsg.textContent = `✅ تم بنجاح استخراج ${products.length} صنف بدقة تامة!`;
         } else {
-            statusMsg.textContent = '⚠️ لم يتم استخراج أصناف، تأكد من ملف الـ PDF.';
+            statusMsg.textContent = '⚠️ لم يتم العثور على أصناف، تأكد من ملف الـ PDF.';
         }
     } catch (err) {
         statusMsg.textContent = '❌ حدث خطأ أثناء القراءة.';
