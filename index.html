@@ -44,6 +44,7 @@
         .upload-label { display: block; background: #f0fdfa; border: 2px dashed var(--primary); color: var(--primary-dark); padding: 12px; border-radius: 12px; cursor: pointer; font-weight: 700; transition: 0.2s; }
         .upload-label:hover { background: #ccfbf1; }
         #pdfUpload { display: none; }
+        .copy-btn { display: none; margin-top: 10px; width: 100%; background: #0f766e; color: white; border: none; padding: 10px; border-radius: 10px; font-weight: bold; cursor: pointer; }
         #statusMsg { font-size: 0.85rem; color: var(--primary-dark); margin-top: 10px; font-weight: 600; }
     </style>
 </head>
@@ -56,7 +57,7 @@
     </div>
 
     <div class="search-box">
-        <input type="text" id="searchInput" class="search-input" placeholder="اكتب اسم الصنف أو الحجم (مثال: جونسون بلسم 500 مل...)" autocomplete="off">
+        <input type="text" id="searchInput" class="search-input" placeholder="اكتب اسم الصنف أو الحجم (مثال: جونسون بلسم...)" autocomplete="off">
         <button class="clear-btn" id="clearBtn">✕</button>
         <div class="suggestions" id="suggestionsBox"></div>
     </div>
@@ -84,14 +85,17 @@
     </div>
 
     <div class="upload-section">
-        <label for="pdfUpload" class="upload-label">📁 اختر ملف الـ PDF لاستخراج الأسعار والحجوم بدقة</label>
+        <label for="pdfUpload" class="upload-label">📁 اختر ملف الـ PDF (لتحديث الأصناف إن أردت)</label>
         <input type="file" id="pdfUpload" accept="application/pdf">
+        <button id="copyJsonBtn" class="copy-btn">📋 نسخ كود الأصناف الكامل للرابط الدائم</button>
         <div id="statusMsg"></div>
     </div>
 </div>
 
 <script>
+// عينة افتراضية أولية (أو يتم جلبها من الذاكرة المحلية)
 let products = JSON.parse(localStorage.getItem('pharmacy_products')) || [];
+
 const itemCount = document.getElementById('itemCount');
 itemCount.textContent = `الأصناف المسجلة حالياً: ${products.length} صنف`;
 
@@ -185,7 +189,7 @@ document.addEventListener('click', (e) => {
     if (!e.target.closest('.search-box')) suggestionsBox.style.display = 'none';
 });
 
-// محرك استخراج دقيق يفصل أسعار الجداول عن أسماء الأصناف ويحافظ على الحجوم (مثل 500 مل)
+// استخراج ملف الـ PDF وتحديثه
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 document.getElementById('pdfUpload').addEventListener('change', async function(e) {
@@ -193,7 +197,8 @@ document.getElementById('pdfUpload').addEventListener('change', async function(e
     if (!file) return;
 
     const statusMsg = document.getElementById('statusMsg');
-    statusMsg.textContent = '⏳ جاري قراءة الملف والحفاظ على الحجوم وأسعار الجداول...';
+    const copyBtn = document.getElementById('copyJsonBtn');
+    statusMsg.textContent = '⏳ جاري استخراج الأصناف وتجهيز الرابط الدائم...';
 
     try {
         const arrayBuffer = await file.arrayBuffer();
@@ -222,14 +227,12 @@ document.getElementById('pdfUpload').addEventListener('change', async function(e
                     row.sort((a, b) => a.x - b.x);
                     const line = toEnglishDigits(row.map(r => r.text).join(' ')).replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
                     
-                    // استخراج الأسعار (أول رقمين هما المستهلك والسعر في الجداول)
                     let nums = line.match(/\b\d+(?:\.\d+)?\b/g);
 
                     if (nums && nums.length >= 2) {
-                        let consumerPrice = parseFloat(nums[0]); // المستهلك
-                        let pharmPrice = parseFloat(nums[1]);    // السعر
+                        let consumerPrice = parseFloat(nums[0]);
+                        let pharmPrice = parseFloat(nums[1]);
 
-                        // اسم الصنف يأتي بعد أول رقمين من اليسار (نترك الحجوم مثل 500 مل كما هي بدون حذف)
                         let cleanName = line;
                         cleanName = cleanName.replace(nums[0], '').replace(nums[1], '').trim();
                         cleanName = cleanName.replace(/[\(\)\+\-\/]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -237,7 +240,6 @@ document.getElementById('pdfUpload').addEventListener('change', async function(e
                         if (cleanName.length > 2 && !cleanName.includes('المستهلك') && !cleanName.includes('اورجا سوفت') && !cleanName.includes('مكتب الريان') && !cleanName.includes('الإثنين')) {
                             let pub = Math.max(consumerPrice, pharmPrice);
                             let pharm = Math.min(consumerPrice, pharmPrice);
-
                             extracted.push({ name: cleanName, pharm: pharm, pub: pub });
                         }
                     }
@@ -251,14 +253,22 @@ document.getElementById('pdfUpload').addEventListener('change', async function(e
             products = Array.from(map.values());
             localStorage.setItem('pharmacy_products', JSON.stringify(products));
             itemCount.textContent = `الأصناف المسجلة حالياً: ${products.length} صنف`;
-            statusMsg.textContent = `✅ تم استخراج ${products.length} صنف مع الحفاظ على الحجوم والأسعار بدقة!`;
+            statusMsg.textContent = `✅ تم استخراج ${products.length} صنف بنجاح! اضغط الزر أدناه لنسخ الكود ووضعه في GitHub ليعمل لدى الجميع.`;
+            copyBtn.style.display = 'block';
         } else {
-            statusMsg.textContent = '⚠️ لم يتم استخراج أصناف، تأكد من ملف الـ PDF.';
+            statusMsg.textContent = '⚠️ لم يتم استخراج أصناف.';
         }
     } catch (err) {
         statusMsg.textContent = '❌ حدث خطأ أثناء القراءة.';
         console.error(err);
     }
+});
+
+document.getElementById('copyJsonBtn').addEventListener('click', () => {
+    const code = `const products = ${JSON.stringify(products)};`;
+    navigator.clipboard.writeText(code).then(() => {
+        alert('تم النسخ! اذهب إلى ملف index.html على GitHub، وابحث عن سطر "let products =" واستبدله بالكود المنسخ، لكي يعمل الموقع عند أي شخص يفتح الرابط فوراً.');
+    });
 });
 </script>
 
